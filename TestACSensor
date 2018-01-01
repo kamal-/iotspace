@@ -1,0 +1,105 @@
+#include <SoftwareSerial.h>
+float current=0;
+const int currentPin = A0;
+const unsigned long sampleTime = 100000UL;                           // sample over 100ms, it is an exact number of cycles for both 50Hz and 60Hz mains
+const unsigned long numSamples = 250UL;                               // choose the number of samples to divide sampleTime exactly, but low enough for the ADC to keep up
+const unsigned long sampleInterval = sampleTime/numSamples;  // the sampling interval, must be longer than then ADC conversion time
+const int adc_zero = 510;                                                     // relative digital zero of the arudino input from ACS712 (could make this a variable and auto-adjust it)
+SoftwareSerial mySerial(10, 11); // RX==TX on device, TX == RX on device esp8266
+
+void setup()
+{
+ Serial.begin(9600);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
+   mySerial.begin(9600);
+  mySerial.println("Hello, world?");
+   pinMode(LED_BUILTIN, OUTPUT);     // Initialize the LED_BUILTIN pin as an output
+  mySerial.println("AT");
+  char response[200]; 
+  while( mySerial.available() <1)
+  {
+    mySerial.println("Waiting...");
+    delay(1000);
+  }
+  if (mySerial.available() > 0) {
+    for(int i = 0 ; mySerial.available() > 0 && i<200 ; i++) {
+      response[i++] = mySerial.read();
+    }
+    mySerial.println(String(response));
+    if(strstr(response, "OK")){
+     // mySerial.println("AT+CWMODE=3");
+    mySerial.println("AT+CWJAP=\"Prak-Airtel\",\"Chatny91\"");
+    if(mySerial.available()<0)
+    {
+    delay(800);  
+    }
+    for(int i = 0 ; mySerial.available() > 0 && i<200 ; i++) {
+      response[i++] = mySerial.read();
+    }
+    mySerial.println(String(response));
+}
+else if(strstr(response, "ERROR")){
+  mySerial.println("AT+RST");
+  
+}
+else {
+  mySerial.println("No Idea");
+}
+   }
+}
+
+void loop()
+{
+  digitalWrite(LED_BUILTIN, LOW);   // Turn the LED on (Note that LOW is the voltage level
+                                    // but actually the LED is on; this is because 
+                                    // it is acive low on the ESP-01)
+  delay(1000);                      // Wait for a second
+  digitalWrite(LED_BUILTIN, HIGH);  // Turn the LED off by making the voltage HIGH
+ 
+mySerial.println("Entering wifi..");
+
+CurrentSense();
+Serial.println(current);
+delay(1000);
+
+}
+
+void CurrentSense()
+{
+ unsigned long currentAcc = 0;
+ unsigned int count = 0;
+ unsigned long prevMicros = micros() - sampleInterval ;
+ while (count < numSamples)
+ {
+   if (micros() - prevMicros >= sampleInterval)
+   {
+     int adc_raw = analogRead(currentPin) - adc_zero;
+     currentAcc += (unsigned long)(adc_raw * adc_raw);
+     ++count;
+     prevMicros += sampleInterval;
+   }
+ }
+ Serial.print("Current value is : ");
+ Serial.println(currentAcc);
+ Serial.print("number of samples : ");
+ Serial.println(numSamples);
+ Serial.print("Square root of current/samples ");
+ Serial.println(sqrt((float)currentAcc/(float)numSamples));
+ 
+ float rms = sqrt((float)currentAcc/(float)numSamples) * (50 / 1024.0);
+//rms=rms-0.10;
+Serial.print("RMS is ");
+Serial.println(rms);
+if (rms<0.20)
+{
+rms=0;
+}
+else
+{
+  mySerial.print("Flowing current value is ...");
+  mySerial.println(rms);
+}
+current=rms;
+}
